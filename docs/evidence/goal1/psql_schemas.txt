@@ -1,0 +1,9 @@
+       List of schemas
+  Name   |       Owner       
+---------+-------------------
+ audit   | dss150p
+ curated | dss150p
+ public  | pg_database_owner
+ staging | dss150p
+(4 rows)
+

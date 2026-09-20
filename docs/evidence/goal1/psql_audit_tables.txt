@@ -1,0 +1,7 @@
+             List of relations
+ Schema |      Name       | Type  |  Owner  
+--------+-----------------+-------+---------
+ audit  | partition_loads | table | dss150p
+ audit  | pipeline_runs   | table | dss150p
+(2 rows)
+
