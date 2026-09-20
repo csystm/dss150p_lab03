@@ -1,0 +1,6 @@
+               List of relations
+ Schema  |       Name        | Type  |  Owner  
+---------+-------------------+-------+---------
+ curated | sales_order_lines | table | dss150p
+(1 row)
+

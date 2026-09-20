@@ -1,0 +1,55 @@
+ Image dss150p_lab03-pipeline Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 625B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 283B 0.0s done
+#2 DONE 0.1s
+
+#3 [internal] load metadata for docker.io/library/python:3.11-slim
+#3 DONE 1.0s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 ...
+
+#6 [1/5] FROM docker.io/library/python:3.11-slim@sha256:da047cb8f9d1d98e5c070f5300ba9f7274e33b8fc0e5be5ed88740aed1b95ba9
+#6 resolve docker.io/library/python:3.11-slim@sha256:da047cb8f9d1d98e5c070f5300ba9f7274e33b8fc0e5be5ed88740aed1b95ba9 0.1s done
+#6 DONE 0.1s
+
+#5 [internal] load build context
+#5 transferring context: 746.13kB 1.3s done
+#5 DONE 1.4s
+
+#7 [2/5] WORKDIR /app
+#7 CACHED
+
+#8 [3/5] COPY requirements.txt /app/requirements.txt
+#8 CACHED
+
+#9 [4/5] RUN pip install --no-cache-dir -r /app/requirements.txt
+#9 CACHED
+
+#10 [5/5] COPY . /app
+#10 DONE 13.4s
+
+#11 exporting to image
+#11 exporting layers
+#11 exporting layers 11.0s done
+#11 exporting manifest sha256:31000f37ba073c94497371c886a48ff4bd67bfa351a0bc19b67f736d0f271242 0.0s done
+#11 exporting config sha256:07640633fee0683d79184602df861f96f475ccd181c4dd07356c2c45b450b64d 0.0s done
+#11 exporting attestation manifest sha256:1c922bcb50c0d505956709a88bd8d889ade046390b86d7bde14bf0335f7ae8f4 0.0s done
+#11 exporting manifest list sha256:9783161212f6aec9b8507cfb99e8f51dcee928f6595eae21eeb3c33c646f4896
+#11 exporting manifest list sha256:9783161212f6aec9b8507cfb99e8f51dcee928f6595eae21eeb3c33c646f4896 0.0s done
+#11 naming to docker.io/library/dss150p_lab03-pipeline:latest 0.0s done
+#11 unpacking to docker.io/library/dss150p_lab03-pipeline:latest
+#11 unpacking to docker.io/library/dss150p_lab03-pipeline:latest 13.4s done
+#11 DONE 24.6s
+
+#12 resolving provenance for metadata file
+#12 DONE 0.1s
+ Image dss150p_lab03-pipeline Built 

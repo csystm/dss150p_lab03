@@ -1,0 +1,3 @@
+PROJECT_ROOT= /app
+DB host/database= postgres dss150p
+Configured source= data/source
