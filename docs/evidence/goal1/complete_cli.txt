@@ -1,0 +1,9 @@
+python -m src.cli validate-env
+python -m src.cli extract        # should print "[ERROR] stage not yet implemented: ..." and exit 2
+echo "exit=$?"
+
+PROJECT_ROOT= C:\Users\pesqu\OneDrive\Documents\data engineering stuff\dss150p_lab03
+DB host/database= localhost dss150p
+Configured source= data/source
+[ERROR] stage not yet implemented: Implement Week 5 raw extraction
+exit=2
