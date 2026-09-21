@@ -207,8 +207,144 @@ A single JSON array must be parsed as one document — you can't read record 1 w
 High cardinality (e.g. partitioning by `order_id`) creates tens of thousands of tiny files — one per key — which is much worse than a single file. Every query pays filesystem metadata overhead, and most query engines struggle with the "small files problem". Poor locality means partitions don't line up with the filters people actually use, so pruning never kicks in and every query scans every partition. Good partition keys have moderate cardinality and match the most common `WHERE` clauses.
 
 ## Goal 4 — Airflow
-### Backfill reasoning
-(answer)
+
+### Evidence
+| Artifact | Path |
+|---|---|
+| DAG list (unpaused) | [dag_list.png](evidence/goal4/dag_list.png) |
+| Trigger dialog — full | [trigger_dialog_full.png](evidence/goal4/trigger_dialog_full.png) |
+| Trigger dialog — partition | [trigger_dialog_partition.png](evidence/goal4/trigger_dialog_partition.png) |
+| Full run grid (all green) and graph | [full_run_graph.png](evidence/goal4/full_run_graph.png) |
+| Extract task log with run_id | [full_run_extract_log.png](evidence/goal4/full_run_extract_log.png) |
+| Audit after full run | [audit_pipeline_runs_full.txt](evidence/goal4/audit_pipeline_runs_full.txt) |
+| Curated run_ids | [curated_run_ids.txt](evidence/goal4/curated_run_ids.txt) |
+| Partition load log | [partition_load_log.png](evidence/goal4/partition_load_log.png) |
+| Partition loads after DAG | [partition_loads_after_dag.txt](evidence/goal4/partition_loads_after_dag.txt) |
+| Failure grid | [failure_grid.png](evidence/goal4/failure_grid.png) |
+| Failure extract log | [failure_extract_log.png](evidence/goal4/failure_log.png) |
+| Failure retry detail | [failure_retry_detail.png](evidence/goal4/failure_retry_detail.png) |
+| Recovery grid | [recovery_grid.png](evidence/goal4/recovery_grid.png) |
+| Dedup after recovery | [dedup_after_recovery.txt](evidence/goal4/dedup_after_recovery.txt) |
+
+### Design decision — where failure state lives
+
+`audit.pipeline_runs` records only runs that reach the **load** stage. It is a table about **loaded data lineage**, not a general job-execution log.
+
+- A successful `load` or `load-partition` writes/updates its row with `status = SUCCESS` and the affected-row count.
+- A failure **before** load (missing source file, connection error, etc.) is not recorded in `audit.pipeline_runs`. Nothing was loaded, so there is no data to trace.
+
+Failure evidence for the pipeline therefore lives in **Airflow's metadata database**, which is the authoritative source for *job execution* state:
+
+- The Grid and Graph views show which task failed, when, and after how many retries.
+- The task log shows the exact error and the `[FAILURE]` line printed by `on_failure_callback` (task_id, run_id, try_number, exception type).
+- Airflow's own `task_instance` and `dag_run` tables retain retry counts and timestamps.
+
+This is a deliberate separation:
+
+| Question | Answered by |
+|---|---|
+| Which rows are loaded, from which run? | `audit.pipeline_runs`, `curated.sales_order_lines.pipeline_run_id` |
+| Did the job run? Did it fail? How many times did it retry? | Airflow UI (Grid, Graph, task logs) |
+| Why did it fail? | Airflow task log + `on_failure_callback` output |
+
+Merging the two would couple the data-lineage table to the orchestrator that happens to be running the pipeline today. If the orchestrator changes (cron → Airflow → Prefect → Dagster), `audit.pipeline_runs` would need schema changes each time. Keeping execution state in the orchestrator keeps the audit table portable.
+
+### Task A — Airflow initialization
+Airflow runs as three services in Docker Compose: `airflow-init` (one-shot: `db migrate` + create admin user), `airflow-webserver` (UI on `localhost:8080`), and `airflow-scheduler` (triggers runs, tracks retries). All three share the same Postgres service used by the pipeline — the metadata lives in the `airflow` database, separate from `dss150p`.
+
+### Task B — DAG operational configuration
+
+| Requirement | Implementation |
+|---|---|
+| Schedule | `schedule='0 2 * * *'` — daily at 02:00 UTC |
+| Parameters | `run_mode` (enum: `full`/`partition`), `year`, `month` (1..12) |
+| Dependencies | `extract >> transform >> load >> validate` |
+| Retries | `retries=2`, `retry_delay=timedelta(minutes=1)` |
+| Timeout | `execution_timeout=timedelta(minutes=10)` per task; `dagrun_timeout=timedelta(minutes=30)` for the whole DAG |
+| Failure handling | `on_failure_callback` prints `task_id`, `run_id`, `try_number`, `logical_date`, error type, and exception |
+| Catch-up | `catchup=False` |
+| Business logic separation | DAG calls `python -m src.cli ...`; no transformation code in the DAG file |
+| Run identity | `PIPELINE_RUN_ID="{{ run_id }}"` exported to every task |
+
+**Why daily at 02:00 UTC:** the source files are exported from the upstream system once per day, and the analytics consumers expect fresh numbers each morning. 02:00 UTC is after the upstream export completes and before the analysts' workday starts.
+
+**Why `catchup=False`:** the source files are current-state exports, not historical batches. If the scheduler were offline for a week, a catch-up would fire seven identical full loads of the current state — wasted work, and seven redundant rows in `audit.pipeline_runs`. Backfill is an explicit decision (manual trigger with `year`/`month` params), not an automatic one.
+
+**Time zone note:** the scheduled run in the audit table shows `logical_date=2026-09-20T02:00:00+00:00` but `started_at_utc=2026-09-21 13:51:37`. Airflow's *logical date* represents the interval the run is scheduled for; the *start time* is when the scheduler actually executed it. In production these would be seconds apart; on a laptop that had been off, the gap is larger. `catchup=False` meant Airflow ran exactly one backlogged interval, not all of them.
+
+### Task C — Full run
+Triggered manually from the UI with default parameters (`run_mode=full`). All four tasks reached `success`. Evidence: [full_run_grid.png](evidence/goal4/full_run_grid.png), [full_run_graph.png](evidence/goal4/full_run_graph.png).
+
+`audit.pipeline_runs` after the run:
+
+| pipeline_run_id | status | rows_curated | started_at_utc |
+|---|---|---|---|
+| `manual__2026-09-21T13:52:32+00:00` | SUCCESS | 0 | 2026-09-21 13:53:38 |
+| `scheduled__2026-09-20T02:00:00+00:00` | SUCCESS | 0 | 2026-09-21 13:51:37 |
+
+Both runs reported `rows_curated=0` because the data was already loaded by Goal 2; the UPSERT skipped every row. That's the correct behavior — the pipeline recognized that nothing had changed.
+
+**Why `curated.sales_order_lines.pipeline_run_id` still shows the old Goal 2 run id:** the row's `pipeline_run_id` column identifies **the transform run that produced the row**, not the load event. Airflow's `manual__...` run id appears in `audit.pipeline_runs` and in the task logs, but the business row was correctly left untouched because the content hadn't changed. This is the same design principle as `record_hash`: the data lineage of a row is set when the row is produced, not when it is transported.
+
+### Task D — Parameterized partition run
+Triggered with `run_mode=partition, year=2026, month=1`. The `load` task's bash takes the partition branch: it runs `python -m src.cli partition` to (re-)materialize the partitioned Parquet, then `python -m src.cli load-partition --year 2026 --month 1`. The load reported `0` rows affected (identical to what was already there), and `audit.partition_loads` for `2026-01` now shows the Airflow run id:
+
+| partition_key | row_count | pipeline_run_id |
+|---|---|---|
+| `2026-01` | 2504 | `manual__...` (latest Airflow run) |
+
+`row_count` reflects the partition's total size (2504), not this run's affected-row count, so the audit row is stable across reruns.
+
+### Task E — Deliberate failure and recovery
+
+**Setup:** `data/source/orders.csv` was renamed to `orders.csv.bak` on the host. Because the repo is bind-mounted into the Airflow container at `/opt/airflow/project`, the change was immediately visible to the DAG.
+
+**Observed behavior:**
+
+- `extract` attempted to run, and — on each attempt — the pipeline raised `PipelineStageError: [extract] run_id=manual__2026-09-21T14:05:26+00:00: Missing source file: /opt/airflow/project/data/source/orders.csv`.
+- The task **retried twice** with ~1-minute delays between attempts (retry_delay=1 min). Total: 3 attempts (1 initial + 2 retries) — matching `retries=2`.
+- After the third failure, the task entered `failed` state. Airflow's `on_failure_callback` fired and printed:
+  `[FAILURE] dag_id=dss150p_sales_pipeline task_id=extract run_id=manual__2026-09-21T14:05:26+00:00 try_number=3 logical_date=2026-09-21 14...`
+- `transform`, `load`, and `validate` never ran — they were marked `upstream_failed` (orange).
+- `audit.pipeline_runs` was **not** written for the failed run. Nothing was loaded, so nothing appeared in the data-lineage table. Execution state lives in Airflow's metadata DB (Grid, Graph, task logs), which is the authoritative source for job-execution history.
+
+**Recovery:** `data/source/orders.csv` was restored, and the failed `extract` task was **cleared** from the Airflow UI. Airflow re-ran the same DAG run: `extract` succeeded on the fourth attempt (visible as "Tries: 1, 2, 3 red; 4 green"), and the downstream tasks followed. The recovery run's `extract` log shows the **same `run_id`** as the failed attempts:
+
+```
+[extract] run_id=manual__2026-09-21T14:05:26+00:00 raw_dir=/opt/airflow/project/data/raw/run_id=manual__2026-09-21T14:05:26+00:00
+Command exited with return code 0
+```
+
+**Verification that recovery was clean:**
+
+```sql
+SELECT COUNT(*) total, COUNT(DISTINCT order_id) distinct_orders
+  FROM curated.sales_order_lines;
+-- 49834 | 49834
+```
+
+No duplicates, no orphan rows, and no manual database cleanup was required. The same UPSERT guard (`record_hash IS DISTINCT FROM EXCLUDED.record_hash`) handled it.
+
+**Which steps are safe to rerun and why:** every stage is idempotent, so all four are safe to rerun:
+
+- **extract** — writes a new `run_id=<id>/` folder. The previous run's snapshot is untouched, and source files are never modified.
+- **transform** — reads the raw snapshot for the given `run_id` and writes staging/curated parquet. Same input → same output. Re-running with the same `run_id` overwrites the same files with identical bytes; re-running with a new `run_id` creates a fresh, non-conflicting snapshot.
+- **load** — uses `ON CONFLICT (order_id) DO UPDATE ... WHERE record_hash IS DISTINCT FROM EXCLUDED.record_hash`. Rows whose content hasn't changed are skipped, so a rerun never duplicates or rewrites unchanged rows.
+- **validate** — pure read-only function over the curated parquet; no side effects.
+
+The only "unsafe" action would be editing source files in place. That's why the raw layer exists: every run reads its own immutable snapshot, so reruns never have to fight with each other or with upstream file changes. In the failure experiment, `Clear + rerun` was safe precisely because of these properties — recovery succeeded with no duplicate `order_id`s and no manual DB cleanup.
+
+### Task (optional) — Backfill reasoning
+
+To backfill a historical month, e.g. 2025-03, on a DAG that normally runs daily:
+
+1. Identify the target partition: `year=2025, month=3`.
+2. Confirm the transform step for that interval produces the correct `order_timestamp` range. Because `transform` reads the current source files and filters by `order_year`/`order_month` during the `partition` step, backfilling relies on the source file still containing that historical data.
+3. Trigger a manual DAG run with `run_mode=partition, year=2025, month=3`. The `load` task routes to `load-partition`, which upserts only the 2025-03 partition.
+4. **Idempotency:** the UPSERT guard means a re-trigger of the same partition changes nothing if the source data hasn't changed. This is what allows a backfill to be retried safely.
+5. **Avoiding double loads:** there's no risk of duplicate `order_id`s because the primary key prevents them. The only risk would be overwriting good data with stale data if the source file had been modified — that's why the transform step must produce the correct row content for that interval before the load runs.
+
+If the source files were historical snapshots (one per day) rather than a current-state export, the correct pattern would be to point the pipeline at the correct historical snapshot before triggering. That's out of scope for this lab, where source files represent the current state.
 
 ## Section 15 — Technical Questions
 1. record_hash: ...
