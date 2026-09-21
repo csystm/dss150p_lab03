@@ -115,8 +115,96 @@ Proof:
 The second load reporting `0` is the key number: the pipeline recognized the data was identical and skipped every row instead of rewriting it.
 
 ## Goal 3 — Storage & Formats
-### Q1–Q5
-(answer per question)
+
+### Evidence
+| Artifact | Path |
+|---|---|
+| Hardware / OS context | [hardware_context.txt](evidence/goal3/hardware_context.txt) |
+| Benchmark run output | [benchmark_run.txt](evidence/goal3/benchmark_run.txt) |
+| Benchmark results table | [benchmark_results.csv](evidence/goal3/benchmark_results.csv) |
+| Materialized file sizes | [benchmark_files.txt](evidence/goal3/benchmark_files.txt) |
+| Partition run output | [partition_run.txt](evidence/goal3/partition_run.txt) |
+| Partition directory tree | [partition_tree.txt](evidence/goal3/partition_tree.txt) |
+| Single-partition read | [partition_single_read.txt](evidence/goal3/partition_single_read.txt) |
+| First partition load | [load_partition_first.txt](evidence/goal3/load_partition_first.txt) |
+| Second partition load (rerun-safe) | [load_partition_second.txt](evidence/goal3/load_partition_second.txt) |
+| Partition dedup check | [load_partition_dedup.txt](evidence/goal3/load_partition_dedup.txt) |
+| Partition load audit | [partition_loads_audit.txt](evidence/goal3/partition_loads_audit.txt) |
+| Full reload after partition test | [load_full_restore.txt](evidence/goal3/load_full_restore.txt) |
+
+### Task A — Four storage representations
+The same 49,834 curated rows were written four ways: CSV, JSON Lines, Parquet (snappy compression), and the PostgreSQL `curated.sales_order_lines` table. File sizes are actual bytes on disk; PostgreSQL's size is measured with `pg_total_relation_size`, which includes the table and its primary-key index.
+
+### Task B — Benchmark methodology
+Each format was measured on the same machine, at the same time, with the same Python process, using `time.perf_counter()`:
+
+- **Size** — file bytes for file formats; table+index bytes for PostgreSQL.
+- **Write time** — a single write of the full dataset.
+- **Full read** — read the entire dataset back into pandas; 5 runs; median reported.
+- **Filtered read** — retrieve only rows with `status = 'DELIVERED'`; 5 runs; median reported.
+- For file formats, the filtered read **includes reading the whole file** before filtering, because that's what a user actually experiences.
+- For PostgreSQL, the filter is pushed into SQL (`WHERE status = ...`) — that's what a database is for.
+
+#### Machine context
+Measurements were taken on a Lenovo laptop running Windows 11 Home, AMD Ryzen 5 7535HS (6 cores / 12 threads), 15.19 GB RAM, Micron 512 GB SSD, Docker Desktop engine 29.8.0 (linux/amd64), Python 3.12.10, pandas 2.2.3, pyarrow 17.0.0. Full details in [hardware_context.txt](evidence/goal3/hardware_context.txt). Results are specific to this machine — absolute numbers will vary on other hardware, but the *relative* ranking is expected to hold because it reflects format design, not CPU speed.
+
+#### Results (medians of 5 runs)
+| Format | Size (bytes) | Write (s) | Full read (s) | Filtered read (s) | Rows |
+|---|---|---|---|---|---|
+| CSV | 14,928,701 | 0.654 | 0.195 | 0.200 | 49,834 |
+| JSONL | 29,305,661 | 0.485 | 0.663 | 0.747 | 49,834 |
+| Parquet | 5,479,614 | 0.114 | 0.060 | 0.062 | 49,834 |
+| PostgreSQL | 15,949,824 | 0.166 | 1.197 | 0.222 | 49,834 |
+
+On this machine:
+
+- **Parquet is smallest** — 2.7× smaller than CSV and 5.3× smaller than JSONL.
+- **Parquet is fastest to write and fastest to read** of the four.
+- **PostgreSQL full-read is slowest** (1.20 s) even though its file size is close to CSV. That's the cost of pulling 49,834 rows across the psycopg wire protocol into Python objects — the database itself is not slow, the round-trip is.
+- **PostgreSQL filtered read (0.22 s)** is close to CSV (0.20 s) and far better than its own full read, because the `WHERE status = ...` is evaluated inside the server before the rows cross the wire.
+
+### Task C — Partitioned Parquet
+The curated dataset was written as a partitioned Parquet dataset using two keys derived from `order_timestamp`: `order_year` and `order_month`. The directory structure is Hive-style, which is the format most tools (Spark, PyArrow, DuckDB, Athena, etc.) understand natively:
+
+```
+data/partitioned/order_year=2025/order_month=1/part-0.parquet
+data/partitioned/order_year=2025/order_month=2/part-0.parquet
+...
+data/partitioned/order_year=2026/order_month=9/part-0.parquet
+```
+
+Reading one partition — `order_year=2026, order_month=1` — returned exactly 2,504 rows, all with `order_year=2026` and `order_month=1`. The partition keys are encoded in the directory names, not stored inside each leaf file; PyArrow's dataset API reconstructs them on read.
+
+**Why partitioning helps:** a query that filters on the partition keys only opens the matching leaf folders. Everything else is skipped without any file I/O. On a multi-TB dataset this turns a full-table scan into a handful of file reads. The bigger the dataset, the more this matters.
+
+### Task D — Selected-partition load
+`python -m src.cli load-partition --year 2026 --month 1` loaded only the 2026-01 partition into `curated.sales_order_lines` using the same UPSERT semantics as the full load.
+
+**Note about the "0 rows" first run:** the initial partition load reported `rows=0` because the same data had already been loaded by Goal 2's full `run-all`. The `record_hash` guard correctly recognized identical rows and skipped every update. To demonstrate the partition load from a clean state, `curated.sales_order_lines` was truncated, then the 2026-01 partition was loaded:
+
+- First partition load after truncate: `rows=2504` (inserted).
+- Second partition load (rerun, unchanged data): `rows=0` (skipped).
+- DB check after both loads: `total = distinct_orders = 2504`, and `min_ts` / `max_ts` both fell inside 2026-01 — proving only that partition was present.
+- The full dataset was then reloaded with `python -m src.cli load` to restore the table to 49,834 rows for Goal 4.
+
+The 2026-01 load is recorded in `audit.partition_loads` with `partition_key = '2026-01'`.
+
+### 9.5 Analysis questions
+
+**1. Which file format was smallest, and why?**
+Parquet (5.48 MB). Two reasons: it's columnar (values of the same type are stored together, which compresses much better than row-oriented formats), and it uses snappy compression. JSONL was the largest (29.31 MB) because every row repeats the same field names — around 100 bytes of key names per row × 49,834 rows.
+
+**2. Which representation was fastest for a full read? Does that imply it's best for every workload?**
+Parquet (0.060 s median). That doesn't mean Parquet is universally best. CSV is easier for humans to inspect and is more widely accepted by downstream tools. JSONL streams naturally (one record per line) and is better for append-only logs. PostgreSQL gives ACID transactions, concurrency, indexes, and multi-user access. Each format is best for a specific kind of workload — the fastest read on this dataset says nothing about writes at scale, concurrency, or tooling compatibility.
+
+**3. How did filtered retrieval differ between Parquet and PostgreSQL? What PostgreSQL design could change the result?**
+Parquet's filtered read (0.062 s) still reads the whole file, because pandas loads the file then filters in memory. PostgreSQL's filtered read (0.222 s) pushes `WHERE status = 'DELIVERED'` into the query planner, so only matching rows cross the network — but the table still has to be scanned because there's no index on `status`. A B-tree index on `status` would let PostgreSQL skip non-matching rows entirely, which would matter a lot at larger scale.
+
+**4. Why is JSON Lines more pipeline-friendly than one giant JSON array?**
+A single JSON array must be parsed as one document — you can't read record 1 without loading the rest. JSON Lines is one JSON object per line: you can read, write, and process it one record at a time, append without rewriting the file, and stream it through a pipeline that never holds the whole dataset in memory. That's why log pipelines, ingestion tools, and event systems default to JSONL.
+
+**5. What happens if a partition key has extremely high cardinality or poor query locality?**
+High cardinality (e.g. partitioning by `order_id`) creates tens of thousands of tiny files — one per key — which is much worse than a single file. Every query pays filesystem metadata overhead, and most query engines struggle with the "small files problem". Poor locality means partitions don't line up with the filters people actually use, so pruning never kicks in and every query scans every partition. Good partition keys have moderate cardinality and match the most common `WHERE` clauses.
 
 ## Goal 4 — Airflow
 ### Backfill reasoning

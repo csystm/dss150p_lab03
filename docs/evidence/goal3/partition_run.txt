@@ -1,0 +1,1 @@
+[partition] run_id=run_20260921T124915Z_6e19ba43 output=C:\Users\laptop\Documents\data-engineering-stuff\dss150p_lab03\data\partitioned
