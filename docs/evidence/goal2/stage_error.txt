@@ -1,0 +1,22 @@
+[ERROR] command=transform run_id=run_missing_test: [transform] run_id=run_missing_test: Raw directory not found: C:\Users\pesqu\OneDrive\Documents\data engineering stuff\dss150p_lab03\data\raw\run_id=run_missing_test
+Traceback (most recent call last):
+  File "C:\Users\pesqu\OneDrive\Documents\data engineering stuff\dss150p_lab03\src\cli.py", line 13, in _run_stage
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pesqu\OneDrive\Documents\data engineering stuff\dss150p_lab03\src\cli.py", line 30, in _cmd_transform
+    staging, staging_q = build_staging(raw_dir, run_id)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pesqu\OneDrive\Documents\data engineering stuff\dss150p_lab03\src\transform\staging.py", line 246, in build_staging
+    raise FileNotFoundError(f'Raw directory not found: {raw_dir}')
+FileNotFoundError: Raw directory not found: C:\Users\pesqu\OneDrive\Documents\data engineering stuff\dss150p_lab03\data\raw\run_id=run_missing_test
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\pesqu\OneDrive\Documents\data engineering stuff\dss150p_lab03\src\cli.py", line 125, in main
+    curated_path = _run_stage('transform', run_id, _cmd_transform, run_id)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pesqu\OneDrive\Documents\data engineering stuff\dss150p_lab03\src\cli.py", line 17, in _run_stage
+    raise PipelineStageError(stage, run_id, str(e)) from e
+src.common.errors.PipelineStageError: [transform] run_id=run_missing_test: Raw directory not found: C:\Users\pesqu\OneDrive\Documents\data engineering stuff\dss150p_lab03\data\raw\run_id=run_missing_test
+exit=1
