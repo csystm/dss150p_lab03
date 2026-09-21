@@ -228,5 +228,23 @@ def run_benchmark(curated_path, output_dir, repeats: int = 5) -> Path:
 
 
 def write_partitioned_parquet(df, output_dir):
-    """Write Parquet partitioned by order_year/order_month."""
-    raise NotImplementedError('Task C — will implement next')
+    """Write Parquet partitioned by order_year/order_month.
+
+    Produces: <output_dir>/order_year=YYYY/order_month=M/part-0.parquet
+    Read a single partition with:
+        pd.read_parquet(f'{output_dir}/order_year=2026/order_month=1')
+    """
+    df = df.copy()
+    ts = pd.to_datetime(df['order_timestamp'], utc=True)
+    df['order_year'] = ts.dt.year.astype('int32')
+    df['order_month'] = ts.dt.month.astype('int32')
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(
+        output_dir,
+        engine='pyarrow',
+        partition_cols=['order_year', 'order_month'],
+        index=False,
+    )
+    return output_dir

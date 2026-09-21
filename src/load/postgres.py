@@ -115,5 +115,46 @@ def upsert_curated(df: pd.DataFrame, run_id: str) -> int:
 
 
 def load_partition(df: pd.DataFrame, year: int, month: int, run_id: str) -> int:
-    """Load only the selected year/month partition and record audit.partition_loads."""
-    raise NotImplementedError('Implement Goal 3 selected-partition load')
+    """Load only the selected year/month partition into curated.sales_order_lines.
+
+    Returns the number of rows actually inserted or updated (affected rows).
+    audit.partition_loads.row_count records the partition's total size, so
+    a rerun reports the same number — useful for auditing the partition itself
+    rather than the run.
+    """
+    partition_key = f'{year:04d}-{month:02d}'
+
+    if df is None or len(df) == 0:
+        _record_partition_load(partition_key, 0, run_id)
+        return 0
+
+    missing = [c for c in CURATED_COLUMNS if c not in df.columns]
+    if missing:
+        raise ValueError(f'Partition dataframe missing columns: {missing}')
+
+    rows = [
+        tuple(None if pd.isna(v) else v for v in row)
+        for row in df[CURATED_COLUMNS].itertuples(index=False, name=None)
+    ]
+
+    with _connect() as conn, conn.cursor() as cur:
+        cur.executemany(_upsert_statement(), rows)
+        affected = cur.rowcount
+
+    _record_partition_load(partition_key, len(df), run_id)
+    return affected
+
+def _record_partition_load(partition_key: str, row_count: int, run_id: str) -> None:
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO audit.partition_loads
+              (partition_key, loaded_at_utc, row_count, pipeline_run_id)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (partition_key) DO UPDATE
+              SET loaded_at_utc  = EXCLUDED.loaded_at_utc,
+                  row_count      = EXCLUDED.row_count,
+                  pipeline_run_id = EXCLUDED.pipeline_run_id
+            """,
+            (partition_key, utc_now_iso(), row_count, run_id),
+        )

@@ -1,0 +1,3 @@
+rows: 2504
+unique years: [2026]
+unique months: [1]

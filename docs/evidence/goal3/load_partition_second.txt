@@ -1,0 +1,1 @@
+[load-partition] year=2026 month=1 rows=0
