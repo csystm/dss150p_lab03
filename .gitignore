@@ -3,3 +3,18 @@ __pycache__/
 *.pyc
 .env
 .pytest_cache/
+
+# Generated pipeline outputs — snapshot only at submission
+data/raw/*
+!data/raw/.gitkeep
+data/staging/*
+!data/staging/.gitkeep
+data/curated/*
+!data/curated/.gitkeep
+data/quarantine/*
+!data/quarantine/.gitkeep
+data/benchmarks/*
+!data/benchmarks/.gitkeep
+data/partitioned/*
+!data/partitioned/.gitkeep
+logs/

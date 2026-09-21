@@ -1,0 +1,1 @@
+[extract] run_id=run_20260921T012906Z_cec53792 raw_dir=C:\Users\pesqu\OneDrive\Documents\data engineering stuff\dss150p_lab03\data\raw\run_id=run_20260921T012906Z_cec53792

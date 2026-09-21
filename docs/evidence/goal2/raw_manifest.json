@@ -1,0 +1,26 @@
+{
+  "run_id": "run_20260921T012906Z_cec53792",
+  "extracted_at_utc": "2026-09-21T01:29:06.275834+00:00",
+  "source_dir": "C:\\Users\\pesqu\\OneDrive\\Documents\\data engineering stuff\\dss150p_lab03\\data\\source",
+  "raw_dir": "C:\\Users\\pesqu\\OneDrive\\Documents\\data engineering stuff\\dss150p_lab03\\data\\raw\\run_id=run_20260921T012906Z_cec53792",
+  "files": [
+    {
+      "logical_name": "customers",
+      "filename": "customers.csv",
+      "bytes": 351125,
+      "sha256": "cd7617476ba9c29548941bafa453060f082707f60eb01335d023a9d46ba49212"
+    },
+    {
+      "logical_name": "products",
+      "filename": "products.json",
+      "bytes": 160497,
+      "sha256": "18ba24bddd2a6f9e691ac720aae28e9c7b707dfb13bb6921a3ce2dbdfcb41047"
+    },
+    {
+      "logical_name": "orders",
+      "filename": "orders.csv",
+      "bytes": 4856331,
+      "sha256": "f2de6cbd4ce9d3838401d3d6468accd40815c14bb6cb682f4340d897fd4338c3"
+    }
+  ]
+}

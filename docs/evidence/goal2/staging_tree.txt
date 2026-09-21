@@ -1,0 +1,13 @@
+data/quarantine:
+run_id=run_20260921T015028Z_c399a78a/
+
+data/quarantine/run_id=run_20260921T015028Z_c399a78a:
+quarantine.parquet
+
+data/staging:
+run_id=run_20260921T015028Z_c399a78a/
+
+data/staging/run_id=run_20260921T015028Z_c399a78a:
+customers.parquet
+orders.parquet
+products.parquet

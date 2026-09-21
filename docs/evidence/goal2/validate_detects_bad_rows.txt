@@ -1,0 +1,4 @@
+- order_id has 1 duplicate row(s); sample: ['O0000001']
+- net_amount has 1 negative value(s)
+- status not in allowed set: 1 row(s); values: ['BOGUS']
+- net_amount inconsistent with formula: 1 row(s)

@@ -1,0 +1,4 @@
+[extract] run_id=run_20260921T025457Z_4527469f raw_dir=C:\Users\pesqu\OneDrive\Documents\data engineering stuff\dss150p_lab03\data\raw\run_id=run_20260921T025457Z_4527469f
+[transform] run_id=run_20260921T025457Z_4527469f curated=C:\Users\pesqu\OneDrive\Documents\data engineering stuff\dss150p_lab03\data\curated\sales_order_lines.parquet
+[load] run_id=run_20260921T025457Z_4527469f upserted_rows=0
+[validate] OK
