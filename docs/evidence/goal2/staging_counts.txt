@@ -1,0 +1,11 @@
+run_id: run_20260921T015028Z_c399a78a
+customers: valid=2996 cols=['customer_id', 'first_name', 'last_name', 'email', 'city', 'customer_tier', 'created_at', 'updated_at', 'pipeline_run_id', 'staged_at_utc']
+products: valid=599 cols=['product_id', 'name', 'brand', 'unit_price', 'active', 'updated_at', 'category', 'department', 'pipeline_run_id', 'staged_at_utc']
+orders: valid=49998 cols=['order_id', 'customer_id', 'product_id', 'order_timestamp', 'quantity', 'unit_price', 'discount_pct', 'status', 'updated_at', 'pipeline_run_id', 'staged_at_utc']
+quarantine total: 7
+source     reason          
+customers  missing_email       4
+orders     invalid_quantity    1
+           invalid_status      1
+products   invalid_price       1
+dtype: int64
