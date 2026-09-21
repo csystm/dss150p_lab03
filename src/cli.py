@@ -13,13 +13,14 @@ def _cmd_extract(run_id: str) -> Path:
 
 
 def _cmd_transform(run_id: str):
+    import pandas as pd
     from src.transform.staging import build_staging
     from src.transform.curated import build_curated
 
     raw_dir = path_for('raw_dir') / f'run_id={run_id}'
-    staging, quarantine = build_staging(raw_dir, run_id)
+    staging, staging_q = build_staging(raw_dir, run_id)
 
-    curated = build_curated(staging, run_id)
+    curated, orphan_q = build_curated(staging, run_id)
 
     curated_dir = path_for('curated_dir')
     curated_dir.mkdir(parents=True, exist_ok=True)
@@ -28,8 +29,11 @@ def _cmd_transform(run_id: str):
 
     quarantine_dir = path_for('quarantine_dir') / f'run_id={run_id}'
     quarantine_dir.mkdir(parents=True, exist_ok=True)
-    if quarantine is not None and len(quarantine) > 0:
-        quarantine.to_parquet(quarantine_dir / 'quarantine.parquet', index=False)
+
+    parts = [q for q in (staging_q, orphan_q)
+             if q is not None and len(q) > 0]
+    combined = pd.concat(parts, ignore_index=True) if parts else staging_q
+    combined.to_parquet(quarantine_dir / 'quarantine.parquet', index=False)
 
     return curated_path
 

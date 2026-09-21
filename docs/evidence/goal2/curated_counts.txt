@@ -1,0 +1,17 @@
+run_id: run_20260921T020235Z_348dc814
+curated rows: 49834
+columns: ['order_id', 'customer_id', 'product_id', 'order_timestamp', 'customer_city', 'customer_tier', 'product_name', 'category', 'brand', 'quantity', 'unit_price', 'discount_pct', 'gross_amount', 'discount_amount', 'net_amount', 'status', 'source_updated_at', 'pipeline_run_id', 'processed_at_utc', 'record_hash']
+   order_id customer_id product_id           order_timestamp customer_city customer_tier         product_name   category   brand  quantity  unit_price  discount_pct  gross_amount  discount_amount  net_amount     status         source_updated_at                pipeline_run_id                  processed_at_utc                                                       record_hash
+0  O0000001      C00213      P0321 2026-05-07 01:22:00+00:00         Pasig          Gold    Helix Storage 321    Storage   Helix         5    86572.35           0.0     432861.75             0.00   432861.75    SHIPPED 2026-05-07 04:22:00+00:00  run_20260921T020235Z_348dc814  2026-09-21T02:02:37.215677+00:00  5b14168582e640e7ee60e587535e5907e6f4a436d7e793311d3dd2dc9b3d6b60
+1  O0000002      C02007      P0523 2026-08-15 07:31:00+00:00         Pasay        Bronze   Vertex Storage 523    Storage  Vertex         6     8062.51           0.1      48375.06          4837.51    43537.55  CANCELLED 2026-08-16 21:31:00+00:00  run_20260921T020235Z_348dc814  2026-09-21T02:02:37.215677+00:00  9708db445defe9552e8149e04dc1c520cdd6e79643a616d17cd904a9611329af
+2  O0000003      C01918      P0506 2026-07-20 23:52:00+00:00     Parañaque          Gold  Helix Accessory 506  Accessory   Helix         7    24400.44           0.0     170803.08             0.00   170803.08  CANCELLED 2026-07-23 23:52:00+00:00  run_20260921T020235Z_348dc814  2026-09-21T02:02:37.215677+00:00  3b72a269494ea912ad4027418c90bcc198024bbc0afc8d33cedb5dd927d27383
+quarantine total: 171
+source     reason                     
+customers  missing_email                   4
+orders     invalid_quantity                1
+           invalid_status                  1
+           orphan_customer                64
+           orphan_customer_and_product     1
+           orphan_product                 99
+products   invalid_price                   1
+dtype: int64
