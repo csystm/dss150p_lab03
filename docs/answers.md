@@ -273,7 +273,7 @@ Airflow runs as three services in Docker Compose: `airflow-init` (one-shot: `db 
 **Time zone note:** the scheduled run in the audit table shows `logical_date=2026-09-20T02:00:00+00:00` but `started_at_utc=2026-09-21 13:51:37`. Airflow's *logical date* represents the interval the run is scheduled for; the *start time* is when the scheduler actually executed it. In production these would be seconds apart; on a laptop that had been off, the gap is larger. `catchup=False` meant Airflow ran exactly one backlogged interval, not all of them.
 
 ### Task C — Full run
-Triggered manually from the UI with default parameters (`run_mode=full`). All four tasks reached `success`. Evidence: [full_run_grid.png](evidence/goal4/full_run_grid.png), [full_run_graph.png](evidence/goal4/full_run_graph.png).
+Triggered manually from the UI with default parameters (`run_mode=full`). All four tasks reached `success`. Evidence: [full_run_graph.png](evidence/goal4/full_run_graph.png).
 
 `audit.pipeline_runs` after the run:
 
