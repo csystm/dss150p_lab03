@@ -84,10 +84,26 @@ def _cmd_partition(run_id: str):
 
 def _cmd_load_partition(year: int, month: int, run_id: str) -> int:
     import pandas as pd
+    from src.benchmark.storage import write_partitioned_parquet
     from src.load.postgres import load_partition
 
-    part_dir = path_for('partition_dir') / f'order_year={year}' / f'order_month={month}'
-    df = pd.read_parquet(part_dir)
+    partition_root = path_for('partition_dir')
+    leaf = partition_root / f'order_year={year}' / f'order_month={month}'
+
+    # Materialize the partition tree on demand if the requested leaf is missing.
+    # This keeps load-partition self-contained (the Airflow DAG relies on the
+    # same guarantee) and avoids a hard failure after a clean slate.
+    if not leaf.is_dir():
+        curated_path = path_for('curated_dir') / 'sales_order_lines.parquet'
+        if not curated_path.is_file():
+            raise FileNotFoundError(
+                f'Curated parquet not found: {curated_path}. '
+                f'Run `python -m src.cli run-all` first.'
+            )
+        df_curated = pd.read_parquet(curated_path)
+        write_partitioned_parquet(df_curated, partition_root)
+
+    df = pd.read_parquet(leaf)
     return load_partition(df, year, month, run_id)
 
 

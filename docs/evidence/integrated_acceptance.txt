@@ -1,0 +1,84 @@
+Python 3.12.10
+[exit=0]
+numpy==2.5.3
+pandas==2.2.3
+psycopg==3.2.3
+psycopg-binary==3.2.3
+pyarrow==17.0.0
+[exit=0]
+PROJECT_ROOT= C:\Users\laptop\Documents\data-engineering-stuff\dss150p_lab03
+DB host/database= localhost dss150p
+Configured source= data/source
+[exit=0]
+time="2026-09-21T23:52:28+08:00" level=warning msg="Found orphan containers (dss150p-airflow-webserver, dss150p-airflow-scheduler, dss150p-airflow-init) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container dss150p-postgres Running 
+[exit=0]
+NAME               IMAGE         COMMAND                  SERVICE    CREATED       STATUS                 PORTS
+dss150p-postgres   postgres:16   "docker-entrypoint.s…"   postgres   3 hours ago   Up 3 hours (healthy)   0.0.0.0:5434->5432/tcp, [::]:5434->5432/tcp
+[exit=0]
+       List of schemas
+  Name   |       Owner       
+---------+-------------------
+ audit   | dss150p
+ curated | dss150p
+ public  | pg_database_owner
+ staging | dss150p
+(4 rows)
+
+[exit=0]
+               List of relations
+ Schema  |       Name        | Type  |  Owner  
+---------+-------------------+-------+---------
+ curated | sales_order_lines | table | dss150p
+(1 row)
+
+[exit=0]
+[extract] run_id=run_20260921T155230Z_2150d0f5 raw_dir=C:\Users\laptop\Documents\data-engineering-stuff\dss150p_lab03\data\raw\run_id=run_20260921T155230Z_2150d0f5
+[transform] run_id=run_20260921T155230Z_2150d0f5 curated=C:\Users\laptop\Documents\data-engineering-stuff\dss150p_lab03\data\curated\sales_order_lines.parquet
+[load] run_id=run_20260921T155230Z_2150d0f5 upserted_rows=49834
+[validate] OK
+[exit=0]
+[load] run_id=run_20260921T155236Z_8af7d912 upserted_rows=0
+[exit=0]
+[validate] OK
+[exit=0]
+[benchmark] run_id=run_20260921T155241Z_528cc9d2 results=C:\Users\laptop\Documents\data-engineering-stuff\dss150p_lab03\data\benchmarks\benchmark_results.csv
+[exit=0]
+[partition] run_id=run_20260921T155300Z_14f9bb6e output=C:\Users\laptop\Documents\data-engineering-stuff\dss150p_lab03\data\partitioned
+[exit=0]
+[load-partition] year=2026 month=1 rows=0
+[exit=0]
+ total | distinct_orders 
+-------+-----------------
+ 49834 |           49834
+(1 row)
+
+[exit=0]
+        pipeline_run_id        | status  | rows_curated |        started_at_utc         
+-------------------------------+---------+--------------+-------------------------------
+ run_20260921T155236Z_8af7d912 | SUCCESS |            0 | 2026-09-21 15:52:37.694357+00
+ run_20260921T155230Z_2150d0f5 | SUCCESS |        49834 | 2026-09-21 15:52:33.456835+00
+(2 rows)
+
+[exit=0]
+ partition_key | row_count |        pipeline_run_id        
+---------------+-----------+-------------------------------
+ 2026-01       |      2504 | run_20260921T155301Z_25669d3c
+(1 row)
+
+[exit=0]
+ Container dss150p-postgres Running 
+ Container dss150p-postgres Waiting 
+ Container dss150p-postgres Waiting 
+ Container dss150p-postgres Healthy 
+ Container dss150p-postgres Healthy 
+ Container dss150p-airflow-webserver Starting 
+ Container dss150p-airflow-scheduler Starting 
+ Container dss150p-airflow-webserver Started 
+ Container dss150p-airflow-scheduler Started 
+[exit=0]
+NAME                        IMAGE                             COMMAND                  SERVICE             CREATED       STATUS                                     PORTS
+dss150p-airflow-scheduler   dss150p_lab03-airflow-scheduler   "/usr/bin/dumb-init …"   airflow-scheduler   2 hours ago   Up Less than a second                      8080/tcp
+dss150p-airflow-webserver   dss150p_lab03-airflow-webserver   "/usr/bin/dumb-init …"   airflow-webserver   2 hours ago   Up Less than a second (health: starting)   0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp
+dss150p-postgres            postgres:16                       "docker-entrypoint.s…"   postgres            3 hours ago   Up 3 hours (healthy)                       0.0.0.0:5434->5432/tcp, [::]:5434->5432/tcp
+[exit=0]
