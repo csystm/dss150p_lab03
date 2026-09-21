@@ -1,0 +1,8 @@
+data/raw/:
+run_id=run_20260921T012906Z_cec53792/
+
+data/raw/run_id=run_20260921T012906Z_cec53792:
+customers.csv
+manifest.json
+orders.csv
+products.json
