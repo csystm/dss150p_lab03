@@ -1,0 +1,8 @@
+total 48564
+drwxr-xr-x 1 laptop 197609        0 Sep 21 20:39 ./
+drwxr-xr-x 1 laptop 197609        0 Sep 21 18:21 ../
+-rw-r--r-- 1 laptop 197609        0 Sep 21 18:21 .gitkeep
+-rw-r--r-- 1 laptop 197609      627 Sep 21 20:41 benchmark_results.csv
+-rw-r--r-- 1 laptop 197609 14928701 Sep 21 20:40 sales_order_lines.csv
+-rw-r--r-- 1 laptop 197609 29305661 Sep 21 20:40 sales_order_lines.jsonl
+-rw-r--r-- 1 laptop 197609  5479614 Sep 21 20:40 sales_order_lines.parquet

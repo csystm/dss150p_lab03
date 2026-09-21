@@ -1,0 +1,49 @@
+﻿== OS ==
+
+
+CsName                      : ERIS-LAPTOP
+OsName                      : Microsoft Windows 11 Home Single Language
+OsVersion                   : 10.0.26200
+OsBuildNumber               : 26200
+CsManufacturer              : LENOVO
+CsModel                     : 83S0
+CsNumberOfLogicalProcessors : 12
+CsTotalPhysicalMemory       : 16312205312
+
+
+
+== CPU ==
+
+
+Name                      : AMD Ryzen 5 7535HS with Radeon Graphics        
+NumberOfCores             : 6
+NumberOfLogicalProcessors : 12
+MaxClockSpeed             : 3301
+
+
+
+== RAM (GB) ==
+15.19
+== Disk ==
+
+
+FriendlyName : Micron MTFDKCD512QGN-1BN1AABLA
+MediaType    : SSD
+Size         : 512110190592
+
+
+
+== Docker ==
+linux/amd64 engine=29.8.0
+== Python & key packages ==
+Python 3.12.10
+
+numpy==2.5.3
+pandas==2.2.3
+psycopg==3.2.3
+psycopg-binary==3.2.3
+pyarrow==17.0.0
+
+
+== Measured at (UTC) ==
+2026-09-21T12:45:00.9425860Z
