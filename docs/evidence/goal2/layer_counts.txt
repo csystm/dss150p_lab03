@@ -1,0 +1,16 @@
+run_id: run_20260921T025457Z_4527469f
+raw files: [('customers.csv', 351125), ('products.json', 160497), ('orders.csv', 4856331)]
+staging customers    2996
+staging products      599
+staging orders      49998
+curated            49834
+quarantine           171
+source     reason                     
+customers  missing_email                   4
+orders     invalid_quantity                1
+           invalid_status                  1
+           orphan_customer                64
+           orphan_customer_and_product     1
+           orphan_product                 99
+products   invalid_price                   1
+dtype: int64
