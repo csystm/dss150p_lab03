@@ -1,3 +1,4 @@
 *.csv -text
 *.json -text
 *.jsonl -text
+*.parquet -text -diff
