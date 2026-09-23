@@ -346,12 +346,59 @@ To backfill a historical month, e.g. 2025-03, on a DAG that normally runs daily:
 
 If the source files were historical snapshots (one per day) rather than a current-state export, the correct pattern would be to point the pipeline at the correct historical snapshot before triggering. That's out of scope for this lab, where source files represent the current state.
 
+## Technical Reflection
+
+### Modularity
+The pipeline is split into five responsibilities — extract, transform, load, validate, benchmark — with each stage isolated in its own module. `src/cli.py` is a thin dispatcher; it knows *what* to call but not *how* anything works. That separation paid off three times: when Airflow needed to drive the same pipeline, the DAG just called `python -m src.cli ...`; when the container needed to run the same code as the host, no changes were required; and when a bug appeared in `load-partition`, the fix was contained to one function. If business logic lived in the CLI or DAG, each of those situations would have required rewriting code in multiple places.
+
+### Idempotency
+Two independent mechanisms make reruns safe. First, `record_hash` is deterministic — it hashes business columns only, deliberately excluding `pipeline_run_id` and `processed_at_utc`, so the same input always produces the same hash regardless of when the pipeline runs. Second, the PostgreSQL UPSERT is guarded by `WHERE record_hash IS DISTINCT FROM EXCLUDED.record_hash`, so a row whose content is unchanged is skipped entirely. This is why re-running `load` reports `0`, why the same partition can be loaded twice without creating duplicates, and why the failure-recovery scenario in Goal 4 needed no manual cleanup. Without these two pieces working together, retries and re-triggers would silently duplicate data.
+
+### Storage trade-offs
+The four formats measured in Goal 3 each won on a different axis. Parquet was smallest (5.5 MB) and fastest to read (0.06 s), because columnar layout compresses well and only the needed columns are read. CSV was second-smallest and fastest to *write* for its size, but has no schema — every read re-infers types. JSONL was 5× larger than Parquet because field names are repeated on every row, but it streams naturally (one record per line), which is why it's the format of choice for append-oriented pipelines. PostgreSQL was competitive on filtered queries because the `WHERE` clause runs inside the database, but its full-read is slow from Python because every row crosses the wire. No single format is best; the right choice depends on whether the workload is analytical scan, append log, or transactional query.
+
+### Orchestration vs business logic
+Airflow's job is to decide *when* and *in what order* things run, and to record what happened. It does not transform data — the DAG file contains zero business rules. This is why the same pipeline works whether it's triggered by a person, by Docker, or by Airflow's scheduler: the code that does the work is the same code, and the only thing that changes is who calls it. Merging the two would couple transformation logic to Airflow's Python API, making it untestable outside Airflow and impossible to run from cron or a container. The separation is what makes the pipeline portable.
+
+### What would change at production scale
+- **Raw snapshots** would move to object storage (S3/GCS) instead of local disk, and the manifest would become a table for queryability.
+- **Benchmarks** would run on a fixed reference machine in CI, not on a developer laptop, so numbers are comparable across commits.
+- **Failures** would alert to a channel (Slack/PagerDuty) from the `on_failure_callback` rather than only printing to the task log.
+- **Partitioning** would shift to a date column with coarser granularity (month is already good; daily might be too fine at 50k rows).
+- **Airflow** would run on a managed deployment (MWAA, Cloud Composer) with a real scheduler uptime, so `0 2 * * *` fires on time instead of being a laptop-dependent schedule.
+
 ## Section 15 — Technical Questions
-1. record_hash: ...
-2. raw preservation: ...
-3. data-quality rejection vs system exception: ...
-4. Parquet vs CSV: ...
-5. DAG with all logic: ...
-6. retries x idempotency: ...
-7. partition cardinality trade-off: ...
-8. API/DB source adaptation: ...
+
+**1. Why is `record_hash` useful for rerun-safe loading, and which columns should not be included in it?**
+
+`record_hash` gives each row a deterministic fingerprint of its business content. When the pipeline reruns and produces the same content, the hash is identical, so the UPSERT's `WHERE record_hash IS DISTINCT FROM EXCLUDED.record_hash` guard skips the row. Without it, every rerun would rewrite all 49,834 rows even though nothing changed — wasted I/O, unnecessary row versions, and misleading update timestamps.
+
+The columns that must **not** be in the hash are the ones that change on every run but say nothing about the business content: `pipeline_run_id` (different run id each time) and `processed_at_utc` (different timestamp each time). If either were included, identical data would produce a different hash on every run, and the guard would never fire — the whole mechanism would be a no-op. In our implementation the hash covers only the business columns plus `source_updated_at`, which is meaningful because it's the timestamp from the *source system*, not from our pipeline.
+
+**2. Why should raw data usually be preserved even when staging/curated outputs are sufficient for analytics?**
+
+Because transformation rules change. A bug in the staging code, a new business rule, or a different definition of "active customer" all mean you need to re-process from the original data. If raw is gone, you can't. Raw is also the only source of truth when a curated number looks wrong — you can trace exactly which input row produced it. In this lab, every `extract` writes a new `data/raw/run_id=<id>/` with a SHA-256 manifest, so any historical snapshot can be re-processed later.
+
+**3. What is the difference between a data-quality rejection and a system exception?**
+
+A **data-quality rejection** is expected: the input has a defect (missing email, negative price, bad status, orphan foreign key). The pipeline continues, records the row in quarantine with a reason, and moves on. A **system exception** is unexpected: a missing file, a database connection failure, a schema mismatch. The pipeline stops, raises an error, and exits non-zero so the scheduler can react. Conflating them causes problems — treating a bad row as a system failure would halt the pipeline for a single record, and treating a missing database as a data problem would let the pipeline continue while producing garbage.
+
+**4. Why might Parquet outperform CSV for selected analytical workloads even if both contain the same rows?**
+
+Three structural reasons. Parquet is **columnar**, so a query that only needs `order_timestamp` and `net_amount` reads only those two columns from disk — CSV must read every byte of every row. Parquet is **compressed** (snappy in our case), so fewer bytes cross the disk bus. Parquet stores **typed values**, so numbers are read as numbers rather than parsed from strings on every read — CSV parsing at 50k rows is measurable, and at 50M rows it dominates. The trade-off is that Parquet is not human-readable and is harder to append to incrementally.
+
+**5. Why is a DAG that contains all transformation logic directly considered harder to maintain?**
+
+Three reasons. First, the logic becomes untestable outside Airflow — you can't run a unit test on a transformation that only exists inside a BashOperator's command string. Second, it's not reusable — running the same logic from a cron job, a container, or a Jupyter notebook requires copy-pasting it. Third, changes to transformation logic create DAG parse risk — a syntax error in a transformation function that runs at DAG parse time can take down the whole scheduler. In our design, the DAG calls `python -m src.cli <stage>`, and every stage is a normal Python function that can be tested, reused, and deployed independently of Airflow.
+
+**6. How do retries interact with idempotency? Give an example where retries without idempotency cause damage.**
+
+Retries assume the underlying operation is safe to repeat. If it isn't, a retry after a *partial* failure can double the effect. Example: a task that appends new orders to `curated.sales_order_lines` without a conflict key. It inserts 20,000 rows, then crashes on row 20,001 due to a network blip. Airflow retries. The task starts from scratch and inserts all 49,834 rows — now the table has 69,834 rows, with 20,000 duplicates. Downstream aggregates are wrong, and cleanup requires a manual DELETE. In our pipeline, this can't happen because every write goes through an UPSERT keyed on `order_id` and guarded by `record_hash`. A retry of an already-completed load is a no-op — `upserted_rows=0`.
+
+**7. What trade-off is introduced by partitioning too aggressively?**
+
+Two costs. **Small-files problem:** each partition becomes at least one file. If you partition by a high-cardinality key (e.g. `order_id`), you end up with 49,834 files of one row each — the filesystem metadata overhead dwarfs the data, and every query pays open/close costs per file. **Poor pruning:** partitioning only helps if queries filter on the partition keys. If nobody queries by `order_month`, the partitioning is pure cost. A good partition key has moderate cardinality (10s–1000s of values), matches common `WHERE` clauses, and produces files of at least a few MB each. Our `order_year/order_month` split gives 30–40 partitions of ~1,500 rows each — reasonable for this dataset size.
+
+**8. How would you adapt the pipeline if the source became an API or database instead of local files?**
+
+Three changes, none of which touch the staging/curated/load logic. First, `src/extract/files.py` would be replaced with an API or DB client that writes the same `data/raw/run_id=<id>/` snapshot format — the downstream contract is unchanged. Second, the manifest would record the API endpoint and query parameters (or a DB query hash) alongside the SHA-256, since those are the "provenance" of an API-sourced snapshot. Third, error handling would shift: a network timeout is a **system exception** and should retry, whereas an API returning 404 for a specific record is a **data-quality rejection** and should quarantine. Everything from staging onward stays identical because it operates on `data/raw/<run_id>/`, not on the source itself.
